@@ -25,11 +25,7 @@ Rails.application.config.to_prepare do
   CamaleonCms::SiteDecorator.class_eval do
     # return the current system currency unit
     def current_unit
-<<<<<<< HEAD
-      @current_unit ||= h.e_get_currency_units[object.meta[:_setting_ecommerce][:current_unit]]['symbol'] rescue '₹'
-=======
       h.e_system_currency
->>>>>>> 23557e5f4000af80b2d2bdc4b436aec5eab52e82
     end
 
     # return the current system currency
