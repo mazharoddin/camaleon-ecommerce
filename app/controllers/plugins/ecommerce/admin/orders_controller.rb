@@ -5,19 +5,16 @@ class Plugins::Ecommerce::Admin::OrdersController < Plugins::Ecommerce::AdminCon
   def index
     orders = current_site.orders
     if params[:q].present?
-      orders = orders.where(slug: params[:q])
+      orders = orders.where("#{Plugins::Ecommerce::Order.table_name}.slug LIKE ?", "%#{params[:q]}%")
     end
     if params[:c].present?
-      orders = orders.joins(:details).where("plugins_order_details.customer LIKE ?", "%#{params[:c]}%")
+      orders = orders.joins(:user).where("#{Cama::User.table_name}.first_name LIKE ? OR #{Cama::User.table_name}.last_name LIKE ?", "%#{params[:c]}%", "%#{params[:c]}%")
     end
     if params[:e].present?
-      orders = orders.joins(:details).where("plugins_order_details.email LIKE ?", "%#{params[:e]}%")
-    end
-    if params[:p].present?
-      orders = orders.joins(:details).where("plugins_order_details.phone LIKE ?", "%#{params[:p]}%")
+      orders = orders.joins(:user).where("#{Cama::User.table_name}.email LIKE ?", "%#{params[:e]}%")
     end
     if params[:s].present?
-      orders = orders.where(status: params[:s])
+      orders = orders.where(status: params[:s].split('|'))
     end
     orders = orders.order('received_at desc')
     @orders = orders.paginate(:page => params[:page], :per_page => current_site.admin_per_page)
@@ -42,6 +39,7 @@ class Plugins::Ecommerce::Admin::OrdersController < Plugins::Ecommerce::AdminCon
     @order.set_meta("billing_address", params[:order][:billing_address])
     @order.set_meta("shipping_address", params[:order][:shipping_address])
     @order.set_metas(params[:metas])
+    @order.update(params.require(:plugins_ecommerce_order).permit(:shipped_at))
     flash[:notice] = "#{t('plugin.ecommerce.message.order_updated', default: 'Order Updated')}"
     redirect_to action: :show, id: params[:id]
   end
@@ -57,8 +55,8 @@ class Plugins::Ecommerce::Admin::OrdersController < Plugins::Ecommerce::AdminCon
 
   # accepted order
   def mark_accepted
-    @order.accepted!
     r = {order: @order}; hooks_run('plugin_ecommerce_before_accepted_order', r)
+    @order.accepted!
     message = "#{t('plugin.ecommerce.message.order_accepted', default: 'Order Accepted')}"
     r = {order: @order, message: message}; hooks_run('plugin_ecommerce_after_accepted_order', r)
     flash[:notice] = r[:message]
@@ -66,9 +64,15 @@ class Plugins::Ecommerce::Admin::OrdersController < Plugins::Ecommerce::AdminCon
   end
 
   def mark_bank_confirmed
-    @order.bank_confirmed!
-    commerce_send_order_received_email(@order, true)
-    flash[:notice] = "#{t('plugin.ecommerce.message.order_bank_confirmed', default: 'Pay Bank Confirmed')}"
+    if @order.on_delivery_pending?
+      @order.on_delivery_confirmed!
+      flash[:notice] = "#{t('plugin.ecommerce.message.order_on_delivery_confirmed', default: 'Payment on Delivery Confirmed')}"
+      commerce_send_order_received_email(@order)
+    else
+      @order.bank_confirmed!
+      flash[:notice] = "#{t('plugin.ecommerce.message.order_bank_confirmed', default: 'Pay Bank Confirmed')}"
+      commerce_send_order_received_email(@order, true)
+    end
     redirect_to action: :index
   end
 

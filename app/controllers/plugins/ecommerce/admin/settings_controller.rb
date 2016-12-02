@@ -4,6 +4,7 @@ class Plugins::Ecommerce::Admin::SettingsController < Plugins::Ecommerce::AdminC
     @setting = current_site.get_meta("_setting_ecommerce", {})
   end
 
+  # save settings
   def saved
     current_site.set_meta('_setting_ecommerce', params[:setting])
     flash[:notice] = t('camaleon_cms.admin.post_type.message.updated')

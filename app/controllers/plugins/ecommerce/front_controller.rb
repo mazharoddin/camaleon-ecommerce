@@ -1,5 +1,5 @@
 class Plugins::Ecommerce::FrontController < CamaleonCms::Apps::PluginsFrontController
-  include Plugins::Ecommerce::EcommercePaymentHelper
+  prepend_before_action :init_flash
   before_action :ecommerce_add_assets_in_front
   before_action :save_cache_redirect, only: [:login, :register]
   def login
@@ -12,7 +12,7 @@ class Plugins::Ecommerce::FrontController < CamaleonCms::Apps::PluginsFrontContr
       login_user(@user, false, (cookies[:return_to] || plugins_ecommerce_orders_path))
       return cookies.delete(:return_to)
     else
-      flash[:error] = t('plugins.ecommerce.messages.invalid_access', default: 'Invalid access')
+      flash[:cama_ecommerce][:error] = t('plugins.ecommerce.messages.invalid_access', default: 'Invalid access')
       return login
     end
   end
@@ -26,7 +26,7 @@ class Plugins::Ecommerce::FrontController < CamaleonCms::Apps::PluginsFrontContr
   def do_register
     @user = current_site.users.new(params.require(:camaleon_cms_user).permit(:first_name, :last_name, :username, :email, :password, :password_confirmation))
     if @user.save
-      flash[:notice] = t('plugins.ecommerce.messages.created_account', default: "Account created successfully")
+      flash[:cama_ecommerce][:notice] = t('plugins.ecommerce.messages.created_account', default: "Account created successfully")
       login_user(@user, false, (cookies[:return_to] || plugins_ecommerce_orders_path))
       return cookies.delete(:return_to)
     else
@@ -41,9 +41,13 @@ class Plugins::Ecommerce::FrontController < CamaleonCms::Apps::PluginsFrontContr
 
   def commerce_authenticate
     unless cama_sign_in?
-      flash[:error] = t('camaleon_cms.admin.login.please_login')
+      flash[:cama_ecommerce][:error] = t('camaleon_cms.admin.login.please_login')
       cookies[:return_to] = request.referer
       redirect_to plugins_ecommerce_login_path
     end
+  end
+
+  def init_flash
+    flash[:cama_ecommerce] = {} unless flash[:cama_ecommerce].present?
   end
 end

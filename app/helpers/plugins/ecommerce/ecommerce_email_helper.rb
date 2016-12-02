@@ -2,7 +2,8 @@ module Plugins::Ecommerce::EcommerceEmailHelper
   include CamaleonCms::EmailHelper
 
   def mark_order_like_received(cart, status = 'paid')
-    order = cart.make_paid!(status)
+    cart_service = Plugins::Ecommerce::CartService.new(current_site, cart)
+    order = cart_service.convert_to_order(status)
 
     # send email to buyer
     commerce_send_order_received_email(order)
@@ -12,6 +13,8 @@ module Plugins::Ecommerce::EcommerceEmailHelper
 
     flash[:notice] = t('plugins.ecommerce.messages.payment_completed', default: "Payment completed successfully")
     args = {order: order}; hooks_run("commerce_after_payment_completed", args)
+
+    order
   end
 
   def commerce_send_order_received_email(order, is_after_bank_confirmation = false)
@@ -93,16 +96,12 @@ module Plugins::Ecommerce::EcommerceEmailHelper
       :shipping_address => order.get_meta('shipping_address'),
       :subtotal => order.cache_the_sub_total,
       :total_cost => order.cache_the_total,
-      :order => order
+      :order => order,
+      :order_details_html => render_to_string(file: 'plugins/ecommerce/front/orders/show', layout: false, locals: {as_partial: true, order: order.decorated? ? order : order.decorate})
     }
-    files = []
-    owners = []
-    order.products.each do |product|
-      files += product.get_fields('ecommerce_files').map{|f| CamaleonCmsLocalUploader::private_file_path(f, current_site) }
-      owners << product.owner if product.owner.present?
-    end
-    data[:owners] = owners.uniq
-    data[:files] = files.uniq
+    order_service = Plugins::Ecommerce::OrderService.new(current_site, order)
+    data[:owners] = order_service.product_owners
+    data[:files] = order_service.product_files
     data
   end
 

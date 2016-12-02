@@ -13,7 +13,7 @@ class Plugins::Ecommerce::ProductDecorator < CamaleonCms::PostDecorator
   end
 
   def the_price(variation_id = nil)
-    "#{h.current_site.current_unit}#{sprintf('%.2f', price(variation_id))}"
+    h.e_parse_price(price(variation_id))
   end
 
   def the_weight(variation_id = nil)
@@ -69,7 +69,7 @@ class Plugins::Ecommerce::ProductDecorator < CamaleonCms::PostDecorator
   end
 
   def the_tax(variation_id = nil)
-    tax(variation_id)
+    h.e_parse_price(tax(variation_id))
   end
 
   def tax(variation_id = nil)
@@ -104,11 +104,12 @@ class Plugins::Ecommerce::ProductDecorator < CamaleonCms::PostDecorator
 
   # return the total of products available to sell
   def the_qty_real(variation_id = nil)
-    carts = h.current_site.carts.where.not(user_id: h.current_user.id).active_cart.joins(:product_items)
-    if variation_id.present?
-      (get_variation(variation_id).qty || 0) - carts.where("#{Plugins::Ecommerce::ProductItemDecorator.table_name}" => {variation_id: variation_id}).sum("#{Plugins::Ecommerce::ProductItem.table_name}.qty")
+    if h.current_user
+      Plugins::Ecommerce::UserProductService.new(
+        h.current_site, h.current_user, object, variation_id).available_qty
     else
-      (object.get_field_value('ecommerce_qty').to_f || 0) - carts.where("#{Plugins::Ecommerce::ProductItemDecorator.table_name}" => {product_id: object.id}).sum("#{Plugins::Ecommerce::ProductItem.table_name}.qty")
+      Plugins::Ecommerce::ProductService.new(
+        h.current_site, object, variation_id).available_qty
     end
   end
 

@@ -1,12 +1,12 @@
 <div class="row" style="min-height: 64px">
     <div class="col-md-9">
         <ol class="breadcrumb" style="margin: 0;">
-            <% @ecommerce_bredcrumb.each_with_index do |m, index| %>
+            <% @ecommerce_breadcrumb.each_with_index do |m, index| %>
                 <% if m[1].present? %>
-                    <li class="<%= "active" if @ecommerce_bredcrumb.size == index+1 %>">
+                    <li class="<%= "active" if @ecommerce_breadcrumb.size == index+1 %>">
                         <a href="<%= m[1] %>"><%= m[0] %></a></li>
                 <% else %>
-                    <li class="<%= "active" if @ecommerce_bredcrumb.size == index+1 %>"><span><%= m[0] %></span></li>
+                    <li class="<%= "active" if @ecommerce_breadcrumb.size == index+1 %>"><span><%= m[0] %></span></li>
                 <% end %>
             <% end %>
         </ol>
@@ -19,7 +19,7 @@
                 <h4><%= t('.shopping_cart', default: 'Shopping Cart') %></h4>
                 <p><%= t('.total_items', default: '(%{qty}) items', qty: @cart.items_total) %>, <%= t('.total', default: 'Total') %>: <%= @cart.the_total_amount %></p>
                 <span>
-                    <a href="<%= @ecommerce_post_type.the_url %>" class="btn btn-default btn-xs"><%= t('.products_list', default: 'Products list') %></a>
+                    <a href="<%= cama_ecommerce_post_type.the_url %>" class="btn btn-default btn-xs"><%= t('.products_list', default: 'Products list') %></a>
                     <% if (@cart.items_total > 0) %>
                         <a href="<%= plugins_ecommerce_checkout_cart_path %>" class="btn btn-warning btn-xs"><%= t('.purchase', default: 'Purchase') %></a>
                     <% end %>
@@ -28,11 +28,11 @@
             </div>
         <% else %>
             <div class=" text-right">
-                <a href="<%= @ecommerce_post_type.the_url %>" class="btn btn-default"><%= t('.products_list', default: 'Products list') %></a>
+                <a href="<%= cama_ecommerce_post_type.the_url %>" class="btn btn-default"><%= t('.products_list', default: 'Products list') %></a>
             </div>
         <% end %>
     </div>
 </div>
 <div class="clearfix">
-    <%= render partial: "/camaleon_cms/flash_messages.html.erb" %>
+    <%= render partial: "/camaleon_cms/flash_messages.html.erb", locals:{ flash: (flash[:cama_ecommerce] || {}).with_indifferent_access} %>
 </div>

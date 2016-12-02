@@ -12,6 +12,16 @@ class Plugins::Ecommerce::Cart < ActiveRecord::Base
 
   after_create :generate_slug
 
+  # status: bank_pending => pending of verification for bank transfer orders
+  #         paid => paid by some method
+  #         canceled => canceled order
+  #         shipped => shipped status
+  #         accepted => received status
+
+  def payment_method
+    @_cama_cache_payment_method ||= Plugins::Ecommerce::PaymentMethod.find_by_id(get_meta('payment_method_id', self.payment_method_id))
+  end
+
   def add_product(product, qty = 1, variation_id = nil)
     pi = product_items.where(product_id: product.id, variation_id: variation_id).first
     if pi.present?
@@ -61,9 +71,7 @@ class Plugins::Ecommerce::Cart < ActiveRecord::Base
         res[:error] = 'required_minimum_price'
       else
         case opts[:discount_type]
-          when 'free'
-            res[:discount] = price || sub_total
-          when 'free_ship'
+          when 'free_ship', 'free'
             res[:discount] = total_shipping
           when 'percent'
             res[:discount] = sub_total * opts[:amount].to_f / 100
@@ -77,9 +85,17 @@ class Plugins::Ecommerce::Cart < ActiveRecord::Base
     res
   end
 
+  def prepare_to_pay
+    self.class.transaction do
+      self.update_columns(
+        status: 'qtys_taken',
+      )
+      self.product_items.decorate.each{|p_item| p_item.decrement_qty! }
+    end
+  end
+
   # convert into order current cart
-  def make_order!
-    self.product_items.decorate.each{|p_item| p_item.decrement_qty! }
+  def convert_to_order
     self.update_columns(kind: 'order', created_at: Time.current)
     site.orders.find(self.id)
   end
@@ -129,11 +145,15 @@ class Plugins::Ecommerce::Cart < ActiveRecord::Base
     total_amount <= 0
   end
 
-  # return order object
-  def make_paid!(status = 'paid')
+  def update_amounts
     product_items.decorate.each do |item|
       p = item.product.decorate
-      item.update_columns(cache_the_price: p.the_price(item.variation_id), cache_the_title: p.the_variation_title(item.variation_id), cache_the_tax: p.the_tax(item.variation_id), cache_the_sub_total: item.the_sub_total)
+      item.update_columns(
+        cache_the_price: p.the_price(item.variation_id),
+        cache_the_title: p.the_variation_title(item.variation_id),
+        cache_the_tax: p.the_tax(item.variation_id),
+        cache_the_sub_total: item.the_sub_total,
+      )
     end
 
     if self.coupon.present?
@@ -144,8 +164,33 @@ class Plugins::Ecommerce::Cart < ActiveRecord::Base
       end
     end
     c = self.decorate
-    self.update_columns(status: status, paid_at: Time.current, amount: total_amount, cache_the_total: c.the_price, cache_the_sub_total: c.the_sub_total, cache_the_tax: c.the_tax_total, cache_the_weight: c.the_weight_total, cache_the_discounts: c.the_total_discounts, cache_the_shipping: c.the_total_shipping)
-    make_order!
+    self.update_columns(
+      amount: total_amount,
+      cache_the_total: c.the_price,
+      cache_the_sub_total: c.the_sub_total,
+      cache_the_tax: c.the_tax_total,
+      cache_the_weight: c.the_weight_total,
+      cache_the_discounts: c.the_total_discounts,
+      cache_the_shipping: c.the_total_shipping,
+    )
+  end
+
+  def mark_paid(status = 'paid')
+    self.update_columns(
+      status: status,
+      paid_at: Time.current,
+    )
+  end
+
+  # return the gateway for paypal transactions
+  def paypal_gateway
+    ActiveMerchant::Billing::Base.mode = payment_method.options[:paypal_sandbox].to_s.to_bool ? :test : :production
+    paypal_options = {
+      login: payment_method.options[:paypal_login],
+      password: payment_method.options[:paypal_password],
+      signature: payment_method.options[:paypal_signature]
+    }
+    ActiveMerchant::Billing::PaypalExpressGateway.new(paypal_options)
   end
 
 
