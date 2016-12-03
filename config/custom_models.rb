@@ -8,8 +8,21 @@ Rails.application.config.to_prepare do
     has_many :coupons, :class_name => "Plugins::Ecommerce::Coupon", foreign_key: :parent_id, dependent: :destroy
     has_many :tax_rates, :class_name => "Plugins::Ecommerce::TaxRate", foreign_key: :parent_id, dependent: :destroy
     has_many :product_attributes, :class_name => "Plugins::Ecommerce::Attribute", foreign_key: :site_id, dependent: :destroy
+
+    # return all the products for current site
     def products
       post_types.where(slug: 'commerce').first.try(:posts)
+    end
+
+    # return the payment (PaymentMethod) method with type = type
+    def payment_method(type)
+      payment_method = payment_methods.actives.detect do |payment_method|
+        payment_method.get_option('type') == type
+      end
+      if payment_method.nil?
+        raise ArgumentError, "Payment method #{type} is not found"
+      end
+      payment_method
     end
   end
 
@@ -20,6 +33,13 @@ Rails.application.config.to_prepare do
 
   CamaleonCms::Post.class_eval do
     has_many :product_variations, class_name: 'Plugins::Ecommerce::ProductVariation', foreign_key: :product_id, dependent: :destroy
+    before_destroy :e_validate_related_orders
+
+    private
+    # verify if there are orders related to this product
+    def e_validate_related_orders
+      errors.add(:base, I18n.t('plugin.ecommerce.message.not_deletable_product')) if Plugins::Ecommerce::ProductItem.where(product_id: id).any?
+    end
   end
 
   CamaleonCms::SiteDecorator.class_eval do
